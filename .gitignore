@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.env
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Generated model artefacts - rebuilt by `python models.py`
+artifacts/*.pkl
+
+# Local databases - rebuilt by `python data_pipeline.py`
+*.sqlite3
+*.db
+
+# Generated source data - rebuilt deterministically (seed 42) by the pipeline
+data/yaml_monthly/
+
+# Logs and OS noise
+run_log.txt
+*.log
+.DS_Store
+.ipynb_checkpoints/
+
+# Derived datasets for the 148k-row catalogue. All are rebuilt in one command
+# (`python data_pipeline.py`) from the committed source file data/swiggy.csv:
+#   cleaned_data.csv   ~50 MB
+#   encoded_data.csv   ~205 MB (dense one-hot matrix, the spec deliverable)
+#   encoded_data.npz   sparse form actually loaded at runtime
+data/cleaned_data.csv
+data/encoded_data.csv
+data/encoded_data.npz
+data/encoded_columns.json
