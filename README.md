@@ -154,8 +154,8 @@ restaurants (
 
 ```bash
 # 1. Clone and enter the project
-git clone https://github.com/<your-username>/Swiggy_Restaurant_Recommendation_System.git
-cd Swiggy_Restaurant_Recommendation_System
+git clone https://github.com/prawin0309/swiggy-Restaurant-Recommendation-System-using-Streamlit.git
+cd swiggy-Restaurant-Recommendation-System-using-Streamlit
 
 # 2. Create and activate a virtual environment
 python -m venv .venv
