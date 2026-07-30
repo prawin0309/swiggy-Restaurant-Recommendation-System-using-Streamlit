@@ -384,14 +384,3 @@ MiniBatchKMeans cluster sizes at k=12.
 
 **Prawin**
 GitHub: [@prawin0309](https://github.com/prawin0309) · Email: prawin0309@gmail.com
-
-## Demo Video
-
-A recorded walkthrough of the running application is required for submission.
-Add the link here once the recording is uploaded:
-
-`Demo video: <paste LinkedIn / Google Drive link here>`
-
-## License
-
-Released under the MIT License. See [LICENSE](LICENSE) for the full text.
