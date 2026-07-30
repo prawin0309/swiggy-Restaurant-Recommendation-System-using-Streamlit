@@ -143,6 +143,42 @@ restaurants (
 
 ---
 
+## Project Metadata
+
+| Field | Detail |
+|---|---|
+| **Domain** | Food Delivery / Recommender Systems |
+| **Skills demonstrated** | Python · Pandas · NumPy · large-scale data cleaning · one-hot and multi-hot encoding · MiniBatchKMeans clustering · cosine similarity ranking · index-alignment validation · SQL · Streamlit · Plotly |
+| **Technical tags** | `python` `streamlit` `recommender-system` `kmeans` `clustering` `pandas` `mysql` `plotly` `data-science` |
+| **Dataset** | `data/swiggy.csv` — 148,429 restaurants after cleaning, spanning 552 normalised cities and 126 cuisine tags, supplied with the project brief. |
+
+### Business Use Cases
+
+* Recommend restaurants that match a diner's city, cuisine, budget and rating preference.
+* Analyse cuisine demand and price bands city by city for expansion planning.
+* Benchmark a restaurant's rating and pricing against its direct local competitors.
+* Segment the catalogue so search can shortlist a candidate pool before ranking.
+
+### Project Evaluation Metrics
+
+| Component | Metric | Achieved |
+|---|---|---|
+| Data quality | Restaurants retained / duplicates removed | 148,429 / 38 |
+| Encoding | Encoded matrix shape / density | 148,429 × 681 / 0.84% |
+| Segmentation (MiniBatchKMeans) | Silhouette score | 0.079 at k=12 |
+| Recommendation | Cosine similarity on matched results | 0.99+ on top-ranked matches |
+
+### Project Deliverables
+
+* `data_pipeline.py` — cleaning, city and cuisine normalisation, SQL load
+* `models.py` — encoders, MiniBatchKMeans segmentation and similarity ranking
+* `app.py` — Streamlit recommender with filter-driven search
+* `artifacts/*.pkl` — one-hot encoder, multi-label binariser, scaler and cluster model
+* `data/cleaned_swiggy.csv` and the encoded matrix
+* `reports/figures/*.png` — the required visualisations
+
+---
+
 ## 2. How to Execute the Project
 
 ### Prerequisites
@@ -341,3 +377,21 @@ Average rating vs average cost for the largest cities.
 MiniBatchKMeans cluster sizes at k=12.
 
 <!-- FIGURES:END -->
+
+---
+
+## Author
+
+**Prawin**
+GitHub: [@prawin0309](https://github.com/prawin0309) · Email: prawin0309@gmail.com
+
+## Demo Video
+
+A recorded walkthrough of the running application is required for submission.
+Add the link here once the recording is uploaded:
+
+`Demo video: <paste LinkedIn / Google Drive link here>`
+
+## License
+
+Released under the MIT License. See [LICENSE](LICENSE) for the full text.

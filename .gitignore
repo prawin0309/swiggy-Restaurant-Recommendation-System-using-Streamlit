@@ -16,9 +16,6 @@ artifacts/*.pkl
 *.sqlite3
 *.db
 
-# Generated source data - rebuilt deterministically (seed 42) by the pipeline
-data/yaml_monthly/
-
 # Logs and OS noise
 run_log.txt
 *.log
