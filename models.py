@@ -83,6 +83,11 @@ def artifacts_ready() -> bool:
 # ---------------------------------------------------------------------------
 # Recommendation
 # ---------------------------------------------------------------------------
+# Candidates fetched per requested result before de-duplication. Large
+# enough that dropping repeated venues still leaves a full page of results.
+OVERFETCH_FACTOR = 6
+
+
 def _apply_hard_filters(cleaned: pd.DataFrame, city: str | None,
                         max_cost: float | None,
                         min_rating: float | None) -> np.ndarray:
@@ -150,11 +155,31 @@ def recommend(
             subset = subset[in_cluster]
 
     scores = cosine_similarity(query, subset).ravel()
-    order = np.argsort(scores)[::-1][:top_k]
+
+    # One-hot preference vectors produce large blocks of tied 1.00 scores, and
+    # the catalogue contains the same brand at several addresses. Over-fetch,
+    # collapse duplicate venues, then break ties on popularity so the top-N is
+    # genuinely diverse rather than an arbitrary slice of identical scores.
+    pool = min(len(scores), max(top_k * OVERFETCH_FACTOR, top_k))
+    order = np.argsort(scores)[::-1][:pool]
     chosen = candidates[order]
 
     result = cleaned.iloc[chosen].copy()
     result["similarity"] = scores[order].round(4)
+
+    dedupe_keys = [c for c in ("name", "city") if c in result.columns]
+    if dedupe_keys:
+        result = result.drop_duplicates(subset=dedupe_keys, keep="first")
+
+    tie_breakers = ["similarity"]
+    ascending = [False]
+    for column in ("rating", "rating_count"):
+        if column in result.columns:
+            tie_breakers.append(column)
+            ascending.append(False)
+    result = result.sort_values(tie_breakers, ascending=ascending, kind="mergesort")
+
+    result = result.head(top_k)
     result["match_method"] = method
     return result.reset_index(drop=True)
 

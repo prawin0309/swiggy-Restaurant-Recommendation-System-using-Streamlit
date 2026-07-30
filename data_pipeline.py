@@ -479,10 +479,19 @@ def encode_query(city: str, cuisines: list[str], rating: float,
     scaler = load_artifact(config.SCALER_PKL)
 
     city_column = bundle.get("city_column", config.CITY_COLUMN_NORMALISED)
-    city_frame = pd.DataFrame({city_column: [normalise_city(pd.Series([city]))[0]]})
-    city_encoded = sparse.csr_matrix(
-        bundle["city_encoder"].transform(city_frame), dtype=np.float32
-    )
+    if city and city != "Any":
+        city_frame = pd.DataFrame(
+            {city_column: [normalise_city(pd.Series([city]))[0]]}
+        )
+        city_encoded = sparse.csr_matrix(
+            bundle["city_encoder"].transform(city_frame), dtype=np.float32
+        )
+    else:
+        # "Any" means no city preference: emit an all-zero city block so no
+        # single city dominates the cosine score. The hard filters already
+        # skip the city constraint for this value.
+        city_width = len(bundle["city_encoder"].get_feature_names_out())
+        city_encoded = sparse.csr_matrix((1, city_width), dtype=np.float32)
 
     known = set(bundle["cuisine_encoder"].classes_)
     cuisine_encoded = sparse.csr_matrix(

@@ -117,7 +117,7 @@ def page_recommend(cleaned: pd.DataFrame, encoded: pd.DataFrame) -> None:
         return
 
     result = models.recommend(
-        city=city if city != "Any" else city_options(cleaned)[1],
+        city=city,
         cuisines=cuisines,
         rating=rating,
         cost=float(cost),
