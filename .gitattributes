@@ -1,0 +1,14 @@
+# Normalise line endings so Windows checkouts (core.autocrlf=true) stop
+# producing whole-file diffs on files that were never actually edited.
+* text=auto
+
+*.py   text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.json text eol=lf
+
+*.csv     -text
+*.npz     binary
+*.pkl     binary
+*.png     binary
+*.sqlite3 binary

@@ -20,7 +20,6 @@ import sys
 
 import numpy as np
 import pandas as pd
-from scipy import sparse
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.metrics import silhouette_score
 from sklearn.metrics.pairwise import cosine_similarity
@@ -28,7 +27,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import config
 from data_pipeline import (
     encode_query,
-    load_artifact,
+    is_any_city,
+    load_artifact_cached,
     load_datasets,
     normalise_city,
     save_artifact,
@@ -93,7 +93,7 @@ def _apply_hard_filters(cleaned: pd.DataFrame, city: str | None,
                         min_rating: float | None) -> np.ndarray:
     """Positional indices surviving the user's non-negotiable constraints."""
     mask = pd.Series(True, index=cleaned.index)
-    if city and city != "Any":
+    if not is_any_city(city):
         target = normalise_city(pd.Series([city]))[0]
         mask &= cleaned[config.CITY_COLUMN_NORMALISED].astype("string") == target
     if max_cost is not None:
@@ -104,7 +104,7 @@ def _apply_hard_filters(cleaned: pd.DataFrame, city: str | None,
 
 
 def recommend(
-    city: str,
+    city: str | None,
     cuisines: list[str],
     rating: float,
     cost: float,
@@ -117,6 +117,8 @@ def recommend(
     encoded=None,
 ) -> pd.DataFrame:
     """Return the ``top_k`` recommended restaurants for a preference vector.
+
+    ``city`` may be ``config.ANY_CITY`` or ``None`` for a nationwide search.
 
     Result positions are mapped back onto the non-encoded ``cleaned_data.csv``
     so the caller always receives human-readable rows.
@@ -146,7 +148,7 @@ def recommend(
     subset = encoded[candidates]
 
     if method == "KMeans Clustering" and config.KMEANS_PKL.exists():
-        kmeans = load_artifact(config.KMEANS_PKL)
+        kmeans = load_artifact_cached(config.KMEANS_PKL)
         target_cluster = int(kmeans.predict(query)[0])
         cluster_labels = kmeans.predict(subset)
         in_cluster = np.flatnonzero(cluster_labels == target_cluster)
@@ -167,10 +169,9 @@ def recommend(
     result = cleaned.iloc[chosen].copy()
     result["similarity"] = scores[order].round(4)
 
-    dedupe_keys = [c for c in ("name", "city") if c in result.columns]
-    if dedupe_keys:
-        result = result.drop_duplicates(subset=dedupe_keys, keep="first")
-
+    # Sort BEFORE de-duplicating: drop_duplicates(keep="first") keeps whichever
+    # row it meets first, so the ordering has to be final by then or the
+    # surviving outlet of a chain is arbitrary rather than the best-rated one.
     tie_breakers = ["similarity"]
     ascending = [False]
     for column in ("rating", "rating_count"):
@@ -178,6 +179,18 @@ def recommend(
             tie_breakers.append(column)
             ascending.append(False)
     result = result.sort_values(tie_breakers, ascending=ascending, kind="mergesort")
+
+    # De-duplicate on the *normalised* city. The raw `city` column carries the
+    # locality ("Koramangala,Bangalore" vs "BTM,Bangalore"), so keying on it
+    # lets one chain occupy half the page under different neighbourhoods -
+    # which is the exact outcome this step exists to prevent. Keying on
+    # base_city collapses a brand within a city while still allowing the same
+    # brand to surface in a different city on a nationwide search.
+    city_key = (config.CITY_COLUMN_NORMALISED
+                if config.CITY_COLUMN_NORMALISED in result.columns else "city")
+    dedupe_keys = [c for c in ("name", city_key) if c in result.columns]
+    if dedupe_keys:
+        result = result.drop_duplicates(subset=dedupe_keys, keep="first")
 
     result = result.head(top_k)
     result["match_method"] = method
@@ -188,7 +201,7 @@ def cluster_assignments(encoded=None) -> np.ndarray:
     """Cluster label for every row of the encoded dataset."""
     if encoded is None:
         _, encoded, _ = load_datasets()
-    kmeans = load_artifact(config.KMEANS_PKL)
+    kmeans = load_artifact_cached(config.KMEANS_PKL)
     return kmeans.predict(encoded)
 
 

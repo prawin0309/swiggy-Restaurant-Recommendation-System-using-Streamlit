@@ -16,7 +16,9 @@ artifacts/*.pkl
 *.sqlite3
 *.db
 
-# Logs and OS noise
+# Editor and OS noise
+.vscode/
+.idea/
 run_log.txt
 *.log
 .DS_Store

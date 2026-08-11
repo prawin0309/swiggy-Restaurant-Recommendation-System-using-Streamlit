@@ -26,9 +26,9 @@ encoded numeric matrix, then mapped back to the human-readable catalogue.
 | Save the encoder | `artifacts/encoder.pkl` (bundle: both encoders + column order) |
 | All features numerical | `StandardScaler` on `rating`, `rating_count`, `cost`, saved as `artifacts/scaler.pkl` |
 | Preprocessed dataset | `data/encoded_data.csv` |
-| **Indices must match** | Asserted at runtime: `len` equality *and* elementwise index equality between `cleaned_data.csv` and `encoded_data.csv` |
+| **Indices must match** | Asserted at runtime: row-count equality **and** a contiguous `0..n-1` index on `cleaned_data.csv`, so encoded row *i* is cleaned row *i* |
 | Clustering / similarity | `MiniBatchKMeans` (k=12) **and** `cosine_similarity`, user-selectable in the UI |
-| Result mapping | Recommendation indices are resolved with `cleaned.loc[chosen]` |
+| Result mapping | Recommendation indices are resolved with `cleaned.iloc[chosen]` |
 
 ### Dataset
 
@@ -72,6 +72,25 @@ Streamlit app — uses a `scipy.sparse` CSR matrix persisted as
 `data/encoded_data.npz` (1.0 MB). The dense `encoded_data.csv` deliverable is
 still written (205 MB, in 10k-row chunks to bound memory) but can be skipped
 with `SWIGGY_WRITE_ENCODED_CSV=0` when iterating.
+
+### How a nationwide search works
+
+Selecting `Any` as the city is not the same as defaulting to some city. The
+city block of the query vector — all 552 dimensions — is left at zero and the
+city hard filter is skipped, so cosine similarity ranks on cuisine, rating,
+review count and cost alone. `data_pipeline.is_any_city()` is the single place
+that decision is made; both `encode_query()` and `models._apply_hard_filters()`
+consult it.
+
+### Why the top-N is de-duplicated and tie-broken
+
+One-hot preference vectors produce large blocks of tied scores, and the
+catalogue lists the same brand at many addresses. `recommend()` therefore
+over-fetches `top_k * OVERFETCH_FACTOR` candidates, drops repeated
+`(name, city)` venues, and breaks the remaining ties on `rating` then
+`rating_count` with a stable mergesort before slicing to `top_k`. Without it a
+page of results is an arbitrary slice of identical 1.00 scores showing the same
+chain six times.
 
 ### Why `cuisine` uses multi-hot rather than plain one-hot
 
@@ -117,7 +136,7 @@ data/swiggy.csv                              148,541 rows / 45 MB
 
 | Page | What it does |
 |---|---|
-| Find Restaurants | Preference form → ranked recommendation cards, price/rating scatter |
+| Find Restaurants | Preference form → ranked recommendation cards, price/rating scatter. City `Any` runs a nationwide search |
 | Explore Data | Filter and search the full cleaned catalogue |
 | Cuisine & City Insights | Cuisine coverage, city cost comparison, positioning scatter, rating histograms |
 | Cluster Explorer | KMeans clusters in price/rating space with per-cluster profiles |
@@ -227,6 +246,7 @@ Expected output from step 4:
 [data] sparse encoded matrix -> encoded_data.npz (1.0 MB)
 [data] dense encoded dataset -> encoded_data.csv (205.3 MB)
 [verify] index alignment confirmed for 148429 rows
+         (encoded row i == cleaned row i, contiguous 0..n-1)
 [verify] restaurants row count = 148429
 Pipeline completed successfully.
 ```
@@ -322,9 +342,12 @@ methods return the same top three.
 
 ## 5. Tech Stack
 
-Python · Pandas · NumPy · scikit-learn (OneHotEncoder, MultiLabelBinarizer,
-StandardScaler, KMeans, cosine similarity) · Streamlit · Plotly ·
-mysql-connector-python · SQLite
+Python · Pandas · NumPy · SciPy (sparse CSR) · scikit-learn (OneHotEncoder,
+MultiLabelBinarizer, StandardScaler, MiniBatchKMeans, cosine similarity) ·
+Streamlit · Plotly · Matplotlib · mysql-connector-python · SQLite
+
+> **Streamlit 1.49 or newer is required.** The layout calls use the `width=`
+> parameter that replaced the deprecated `use_container_width`.
 
 > **Note:** SQLAlchemy is intentionally not used. Database access is
 > cursor-based through `mysql-connector-python` (or `sqlite3` for the

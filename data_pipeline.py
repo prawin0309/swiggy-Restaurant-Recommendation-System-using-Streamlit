@@ -59,6 +59,22 @@ def load_artifact(path):
         return pickle.load(handle)
 
 
+# Unpickling the encoder bundle and the KMeans model on every query is pure
+# waste - they only change when the pipeline is re-run. Cached per path and
+# invalidated on mtime, so a retrained artefact is still picked up.
+_ARTIFACT_CACHE: dict = {}
+
+
+def load_artifact_cached(path):
+    """``load_artifact`` with an mtime-invalidated in-process cache."""
+    key = str(path)
+    mtime = path.stat().st_mtime_ns
+    cached = _ARTIFACT_CACHE.get(key)
+    if cached is None or cached[0] != mtime:
+        _ARTIFACT_CACHE[key] = (mtime, load_artifact(path))
+    return _ARTIFACT_CACHE[key][1]
+
+
 # ---------------------------------------------------------------------------
 # Database layer
 # ---------------------------------------------------------------------------
@@ -247,8 +263,9 @@ def load_raw_dataset() -> pd.DataFrame:
     if config.RAW_CSV.exists():
         print(f"[data] using real dataset: {config.RAW_CSV.name}")
         return pd.read_csv(config.RAW_CSV)
-    print("[data] no real dataset found (see DATASET_MISSING.txt); "
-          "generating synthetic data with the documented schema")
+    print(f"[data] {config.RAW_CSV.name} not found in {config.DATA_DIR}; "
+          "generating a deterministic synthetic catalogue with the documented "
+          "schema so the pipeline still runs end to end")
     frame = generate_synthetic_dataset()
     frame.to_csv(config.RAW_CSV, index=False)
     return frame
@@ -298,6 +315,16 @@ def normalise_city(series: pd.Series) -> pd.Series:
     return (
         series.astype("string").str.split(",").str[-1].str.strip().str.title()
     )
+
+
+def is_any_city(city) -> bool:
+    """True when the caller wants every city rather than one named city.
+
+    Single source of truth for the sentinel, shared by ``encode_query`` (which
+    emits an all-zero city block) and ``models._apply_hard_filters`` (which
+    skips the city constraint).
+    """
+    return city is None or str(city).strip() in ("", config.ANY_CITY)
 
 
 def clean_dataset(frame: pd.DataFrame) -> pd.DataFrame:
@@ -472,14 +499,19 @@ def load_encoded() -> tuple[sparse.csr_matrix, list[str]]:
     return encoded.tocsr(), columns
 
 
-def encode_query(city: str, cuisines: list[str], rating: float,
+def encode_query(city: str | None, cuisines: list[str], rating: float,
                  rating_count: int, cost: float) -> sparse.csr_matrix:
-    """Encode a user preference vector into the trained feature space."""
-    bundle = load_artifact(config.ENCODER_PKL)
-    scaler = load_artifact(config.SCALER_PKL)
+    """Encode a user preference vector into the trained feature space.
+
+    ``city`` may be ``config.ANY_CITY`` or ``None`` for a nationwide search, in
+    which case the whole city block stays at zero and cosine similarity ranks
+    on cuisine, rating, review count and cost alone.
+    """
+    bundle = load_artifact_cached(config.ENCODER_PKL)
+    scaler = load_artifact_cached(config.SCALER_PKL)
 
     city_column = bundle.get("city_column", config.CITY_COLUMN_NORMALISED)
-    if city and city != "Any":
+    if not is_any_city(city):
         city_frame = pd.DataFrame(
             {city_column: [normalise_city(pd.Series([city]))[0]]}
         )
@@ -525,9 +557,20 @@ def run_pipeline() -> tuple[pd.DataFrame, sparse.csr_matrix, list[str]]:
     encoded, columns = encode_dataset(cleaned)
     write_encoded_outputs(encoded, columns)
 
-    assert encoded.shape[0] == len(cleaned), "index alignment broken"
+    # Matching row counts is necessary but not sufficient. Assert the actual
+    # correspondence the recommender relies on, so a future reordering or
+    # partial drop fails loudly here instead of silently returning the wrong
+    # restaurant for a given index.
+    assert encoded.shape[0] == len(cleaned), (
+        f"index alignment broken: encoded has {encoded.shape[0]} rows, "
+        f"cleaned has {len(cleaned)}"
+    )
+    assert cleaned.index.equals(pd.RangeIndex(len(cleaned))), (
+        "cleaned_data.csv must carry a contiguous 0..n-1 index for positional "
+        "lookup to be valid"
+    )
     print(f"[verify] index alignment confirmed for {len(cleaned)} rows "
-          "(encoded row i == cleaned row i)")
+          "(encoded row i == cleaned row i, contiguous 0..n-1)")
 
     db = Database()
     try:

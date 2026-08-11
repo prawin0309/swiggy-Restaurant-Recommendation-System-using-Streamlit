@@ -14,6 +14,7 @@ from __future__ import annotations
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from scipy import sparse
 
 import config
 import models
@@ -58,7 +59,7 @@ def city_options(cleaned: pd.DataFrame) -> list[str]:
         if config.CITY_COLUMN_NORMALISED in cleaned.columns
         else "city"
     )
-    return ["Any"] + cleaned[column].value_counts().index.tolist()
+    return [config.ANY_CITY] + cleaned[column].value_counts().index.tolist()
 
 
 def artefacts_warning() -> None:
@@ -71,7 +72,7 @@ def artefacts_warning() -> None:
 # ---------------------------------------------------------------------------
 # Pages
 # ---------------------------------------------------------------------------
-def page_recommend(cleaned: pd.DataFrame, encoded: pd.DataFrame) -> None:
+def page_recommend(cleaned: pd.DataFrame, encoded: sparse.csr_matrix) -> None:
     st.header("🍽️ Find Restaurants")
     st.caption(
         "Your preferences are one-hot encoded into the same feature space as "
@@ -84,7 +85,12 @@ def page_recommend(cleaned: pd.DataFrame, encoded: pd.DataFrame) -> None:
     with st.form("preferences"):
         col_a, col_b, col_c = st.columns(3)
 
-        city = col_a.selectbox("City", city_options(cleaned))
+        city = col_a.selectbox(
+            "City", city_options(cleaned),
+            help=f"'{config.ANY_CITY}' searches the whole catalogue: the city "
+                 "block of the query vector is zeroed and the city filter is "
+                 "skipped, so ranking falls back to cuisine, rating and cost.",
+        )
         cuisines = col_a.multiselect(
             "Preferred cuisines", cuisine_options,
             default=cuisine_options[:2] if len(cuisine_options) >= 2 else cuisine_options,
@@ -105,7 +111,7 @@ def page_recommend(cleaned: pd.DataFrame, encoded: pd.DataFrame) -> None:
 
         submitted = st.form_submit_button("Recommend restaurants",
                                           type="primary",
-                                          use_container_width=True)
+                                          width="stretch")
 
     if not submitted:
         return
@@ -133,7 +139,9 @@ def page_recommend(cleaned: pd.DataFrame, encoded: pd.DataFrame) -> None:
         st.info("No matches found. Loosen the filters and try again.")
         return
 
-    st.success(f"{len(result)} recommendations via **{method}**")
+    scope = ("across every city" if config.ANY_CITY == city
+             else f"in **{city}**")
+    st.success(f"{len(result)} recommendations {scope} via **{method}**")
 
     for rank, row in enumerate(result.itertuples(index=False), start=1):
         with st.container(border=True):
@@ -161,14 +169,14 @@ def page_recommend(cleaned: pd.DataFrame, encoded: pd.DataFrame) -> None:
         px.scatter(result, x="cost", y="rating", size="similarity",
                    color="city", hover_name="name",
                    title="Recommended restaurants — price versus rating"),
-        use_container_width=True,
+        width="stretch",
     )
 
     with st.expander("Raw result table"):
         st.dataframe(
             result[["name", "city", "cuisine", "rating", "rating_count",
                     "cost", "similarity"]],
-            use_container_width=True, hide_index=True,
+            width="stretch", hide_index=True,
         )
 
 
@@ -206,7 +214,7 @@ def page_explore(cleaned: pd.DataFrame) -> None:
     st.dataframe(
         view[["name", "city", "cuisine", "rating", "rating_count", "cost"]]
         .head(2000),
-        use_container_width=True, hide_index=True, height=460,
+        width="stretch", hide_index=True, height=460,
     )
 
 
@@ -222,14 +230,14 @@ def page_insights(cleaned: pd.DataFrame) -> None:
                x="restaurants", y="cuisine_tag", orientation="h",
                color="avg_rating", color_continuous_scale="Viridis",
                title="Most common cuisines"),
-        use_container_width=True,
+        width="stretch",
     )
     right.plotly_chart(
         px.bar(cities.sort_values("avg_cost"), x="avg_cost", y="city",
                orientation="h", color="avg_rating",
                color_continuous_scale="Plasma",
                title="Average cost for two by city"),
-        use_container_width=True,
+        width="stretch",
     )
 
     st.plotly_chart(
@@ -237,7 +245,7 @@ def page_insights(cleaned: pd.DataFrame) -> None:
                    size="restaurants", hover_name="cuisine_tag",
                    color="cuisine_tag",
                    title="Cuisine positioning — price versus rating (top 40)"),
-        use_container_width=True,
+        width="stretch",
     )
 
     top_cities = cities.head(8)["city"].tolist()
@@ -250,13 +258,13 @@ def page_insights(cleaned: pd.DataFrame) -> None:
         px.histogram(cleaned[cleaned[column].isin(top_cities)], x="rating",
                      nbins=30, color=column,
                      title="Rating distribution — eight largest cities"),
-        use_container_width=True,
+        width="stretch",
     )
 
-    st.dataframe(cities, use_container_width=True, hide_index=True)
+    st.dataframe(cities, width="stretch", hide_index=True)
 
 
-def page_clusters(cleaned: pd.DataFrame, encoded: pd.DataFrame) -> None:
+def page_clusters(cleaned: pd.DataFrame, encoded: sparse.csr_matrix) -> None:
     st.header("🧩 Cluster Explorer")
     if not config.KMEANS_PKL.exists():
         artefacts_warning()
@@ -285,16 +293,16 @@ def page_clusters(cleaned: pd.DataFrame, encoded: pd.DataFrame) -> None:
                    labels={"color": "cluster"},
                    title="KMeans clusters in price/rating space "
                          f"({len(plot_sample):,}-row sample)"),
-        use_container_width=True,
+        width="stretch",
     )
-    st.dataframe(profile, use_container_width=True, hide_index=True)
+    st.dataframe(profile, width="stretch", hide_index=True)
 
     chosen = st.selectbox("Inspect a cluster", sorted(labelled["cluster"].unique()))
     st.dataframe(
         labelled[labelled["cluster"] == chosen][
             ["name", "city", "cuisine", "rating", "cost"]
         ].head(1000),
-        use_container_width=True, hide_index=True, height=400,
+        width="stretch", hide_index=True, height=400,
     )
 
 

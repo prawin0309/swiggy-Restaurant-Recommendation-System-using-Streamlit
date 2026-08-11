@@ -46,6 +46,10 @@ ENCODED_CSV_CHUNK_ROWS = 10_000
 CITY_COLUMN_RAW = "city"
 CITY_COLUMN_NORMALISED = "base_city"
 
+# Sentinel for "search every city". One constant instead of the string "Any"
+# repeated across the UI, the query encoder and the hard filters.
+ANY_CITY = "Any"
+
 # rating_count arrives as bucketed text ("1K+ ratings", "Too Few Ratings").
 RATING_COUNT_MAP = {
     "too few ratings": None,
