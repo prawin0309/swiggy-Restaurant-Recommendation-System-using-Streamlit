@@ -32,7 +32,12 @@ DB_BACKEND = os.getenv("SWIGGY_DB_BACKEND", "auto").lower()
 RANDOM_SEED = 42
 N_SYNTHETIC_ROWS = 4000
 TOP_K = 10
-N_CLUSTERS = 12
+# Elbow-selected, not guessed: `python select_k.py` sweeps k=2..32 with three
+# seeds per k and locates the knee of the inertia curve (Kneedle). k=10 is the
+# knee; reports/k_selection.json holds the full sweep. Silhouette is ~0.08 at
+# every k>=4 because the feature space is 99.2% sparse one-hot, so it cannot
+# pick k on its own - the inertia knee is what decides.
+N_CLUSTERS = 10
 
 # The encoded matrix is ~148k x ~680 and is held in memory as a scipy sparse
 # matrix (encoded_data.npz). The dense CSV deliverable is ~200 MB, so writing it

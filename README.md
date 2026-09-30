@@ -27,7 +27,7 @@ encoded numeric matrix, then mapped back to the human-readable catalogue.
 | All features numerical | `StandardScaler` on `rating`, `rating_count`, `cost`, saved as `artifacts/scaler.pkl` |
 | Preprocessed dataset | `data/encoded_data.csv` |
 | **Indices must match** | Asserted at runtime: row-count equality **and** a contiguous `0..n-1` index on `cleaned_data.csv`, so encoded row *i* is cleaned row *i* |
-| Clustering / similarity | `MiniBatchKMeans` (k=12) **and** `cosine_similarity`, user-selectable in the UI |
+| Clustering / similarity | `MiniBatchKMeans` (k=10, chosen by the elbow method in `select_k.py`) **and** `cosine_similarity`, user-selectable in the UI |
 | Result mapping | Recommendation indices are resolved with `cleaned.iloc[chosen]` |
 
 ### Dataset
@@ -125,7 +125,7 @@ data/swiggy.csv                              148,541 rows / 45 MB
                     │
         ┌───────────┴────────────┐
         ▼                        ▼
- cosine_similarity      MiniBatchKMeans (k=12)
+ cosine_similarity      MiniBatchKMeans (k=10)
         │                        │  artifacts/kmeans.pkl
         └───────────┬────────────┘
                     ▼
@@ -167,7 +167,7 @@ restaurants (
 | Field | Detail |
 |---|---|
 | **Domain** | Food Delivery / Recommender Systems |
-| **Skills demonstrated** | Python · Pandas · NumPy · large-scale data cleaning · one-hot and multi-hot encoding · MiniBatchKMeans clustering · cosine similarity ranking · index-alignment validation · SQL · Streamlit · Plotly |
+| **Skills demonstrated** | Python · Pandas · NumPy · large-scale data cleaning · one-hot and multi-hot encoding · MiniBatchKMeans clustering · elbow-method model selection · cosine similarity ranking · index-alignment validation · SQL · Streamlit · Plotly |
 | **Technical tags** | `python` `streamlit` `recommender-system` `kmeans` `clustering` `pandas` `mysql` `plotly` `data-science` |
 | **Dataset** | `data/swiggy.csv` — 148,429 restaurants after cleaning, spanning 552 normalised cities and 126 cuisine tags, supplied with the project brief. |
 
@@ -184,12 +184,13 @@ restaurants (
 |---|---|---|
 | Data quality | Restaurants retained / duplicates removed | 148,429 / 38 |
 | Encoding | Encoded matrix shape / density | 148,429 × 681 / 0.84% |
-| Segmentation (MiniBatchKMeans) | Silhouette score | 0.079 at k=12 |
+| Segmentation (MiniBatchKMeans) | Elbow-selected k / silhouette | k=10 (inertia knee) / 0.085 |
 | Recommendation | Cosine similarity on matched results | 0.99+ on top-ranked matches |
 
 ### Project Deliverables
 
 * `data_pipeline.py` — cleaning, city and cuisine normalisation, SQL load
+* `select_k.py` — elbow-method sweep that selects `N_CLUSTERS`, writes `reports/k_selection.json` and the elbow figure
 * `models.py` — encoders, MiniBatchKMeans segmentation and similarity ranking
 * `app.py` — Streamlit recommender with filter-driven search
 * `artifacts/*.pkl` — one-hot encoder, multi-label binariser, scaler and cluster model
@@ -223,10 +224,13 @@ pip install -r requirements.txt
 # 4. Clean → encode → save encoder.pkl → load to SQL
 python data_pipeline.py
 
-# 5. Fit KMeans and run the recommendation smoke test
+# 5. Choose k by the elbow method (writes reports/k_selection.json + figure)
+python select_k.py
+
+# 6. Fit KMeans at config.N_CLUSTERS and run the recommendation smoke test
 python models.py
 
-# 6. Launch the application
+# 7. Launch the application
 streamlit run app.py
 ```
 
@@ -289,7 +293,7 @@ python data_pipeline.py
 | Streamlit URL | `http://localhost:8501` | — |
 | Dataset | `data/swiggy.csv` (148,541 rows) | `RAW_CSV` |
 | Recommendations returned | `10` | `TOP_K` |
-| KMeans clusters | `12` | `N_CLUSTERS` |
+| KMeans clusters | `10` (elbow-selected) | `N_CLUSTERS` |
 | Write dense encoded CSV | on | `SWIGGY_WRITE_ENCODED_CSV` |
 | Random seed | `42` | `RANDOM_SEED` |
 
@@ -317,7 +321,7 @@ On the **Find Restaurants** page:
 | Cuisine tags | 126 |
 | Encoded matrix | 148,429 × 681, 0.84% dense |
 | Index alignment | verified row-for-row |
-| MiniBatchKMeans | k=12, silhouette **0.079** (5,000-row sample) |
+| MiniBatchKMeans | k=10 by elbow, silhouette **0.085** (5,000-row sample) |
 
 Sample output for **Bangalore / Biryani + North Indian / ₹400 / rating ≥ 4.2**:
 
@@ -329,16 +333,50 @@ Sample output for **Bangalore / Biryani + North Indian / ₹400 / rating ≥ 4.2
 | BOX8 – Desi Meals | CV Raman Nagar, Bangalore | North Indian, Biryani | 4.2 | ₹250 | 0.995 |
 | Calcutta Biryani Club | Marathahalli, Bangalore | Biryani, North Indian | 4.2 | ₹300 | 0.991 |
 
+### Choosing k — the elbow method
+
+`select_k.py` sweeps k = 2, 4, 6 … 32. Each k is fitted three times (seeds 42,
+43, 44) and the inertias are averaged, because a single `MiniBatchKMeans` run
+is stochastic enough that inertia can *rise* with k and make the knee
+unreadable. The elbow is located with the Kneedle criterion: normalise the
+curve to the unit square, take the chord from the first point to the last, and
+pick the k lying furthest below it.
+
+| k | inertia (mean of 3 seeds) | silhouette | smallest cluster | largest cluster |
+|---|---|---|---|---|
+| 2 | 733,545 | 0.1769 | 29,812 | 118,616 |
+| 4 | 681,254 | 0.0461 | 9,849 | 80,573 |
+| 6 | 609,974 | 0.0649 | 4,269 | 63,005 |
+| 8 | 588,049 | 0.0703 | 4,075 | 49,176 |
+| **10** | **566,161** | **0.0846** | **3,245** | **30,726** |
+| 12 | 554,370 | 0.0761 | 2,692 | 23,149 |
+| 14 | 535,594 | 0.0856 | 1,886 | 21,951 |
+| 16 | 525,764 | 0.0787 | 2,353 | 17,747 |
+| 18 | 521,052 | 0.0818 | 1,109 | 16,857 |
+| 20 | 501,067 | 0.0839 | 959 | 16,906 |
+| 24 | 503,213 | 0.0767 | 1,311 | 12,099 |
+| 28 | 490,753 | 0.0814 | 679 | 11,555 |
+| 32 | 456,513 | 0.0768 | 242 | 10,141 |
+
+**k = 10** is the knee, and it is what `config.N_CLUSTERS` is set to.
+
+Silhouette cannot make this decision. Across the usable range it moves between
+0.046 and 0.086 — flat noise, not a signal. Its nominal peak is k=2 at 0.177,
+which is a degenerate split: one cluster holds 118,616 of the 148,429
+restaurants, which is worthless as a browsing segmentation. Above k≈20 the
+smallest clusters fall below a thousand restaurants, which starves the KMeans
+candidate pool and pushes `recommend()` onto its relaxed filter tiers.
+
 ### A note on the clustering score
 
-Silhouette **0.079** is low. That is expected: the feature space is 99.2%
-zeros (a restaurant occupies 1 of 552 city dimensions and 1–3 of 126 cuisine
-dimensions), and one-hot geometry does not produce well-separated Euclidean
-blobs. The clusters are useful as browsing segments, and the **recommendation
-quality comes from cosine similarity**, which scores 0.99+ on genuinely
-matching restaurants. The KMeans mode is offered as a faster alternative that
-restricts the candidate pool before ranking — on the sample above, both
-methods return the same top three.
+Silhouette **0.085** is low whatever k is chosen. That is expected: the feature
+space is 99.2% zeros (a restaurant occupies 1 of 552 city dimensions and 1–3 of
+126 cuisine dimensions), and one-hot geometry does not produce well-separated
+Euclidean blobs — every point sits on a corner of a hypercube. The clusters are
+useful as browsing segments, and the **recommendation quality comes from cosine
+similarity**, which scores 0.99+ on genuinely matching restaurants. The KMeans
+mode is offered as a faster alternative that restricts the candidate pool
+before ranking — on the sample above, both methods return the same top three.
 
 ## 5. Tech Stack
 
@@ -397,7 +435,15 @@ Average rating vs average cost for the largest cities.
 
 ![Cluster sizes](reports/figures/06_cluster_sizes.png)
 
-MiniBatchKMeans cluster sizes at k=12.
+MiniBatchKMeans cluster sizes at k=10.
+
+### Choosing k — elbow and silhouette
+
+![Elbow method](reports/figures/07_elbow.png)
+
+Inertia versus k with the Kneedle chord (left) and silhouette versus k (right),
+from `select_k.py`. The knee sits at k=10; the silhouette curve is flat across
+the usable range and cannot select k on its own.
 
 <!-- FIGURES:END -->
 

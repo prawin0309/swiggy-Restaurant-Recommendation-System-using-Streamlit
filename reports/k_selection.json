@@ -1,0 +1,116 @@
+{
+  "rows": [
+    {
+      "k": 2,
+      "inertia": 733545.0,
+      "inertia_spread": 2609.3125,
+      "silhouette": 0.17693504194418588,
+      "smallest_cluster": 29812,
+      "largest_cluster": 118616
+    },
+    {
+      "k": 4,
+      "inertia": 681253.9375,
+      "inertia_spread": 61599.625,
+      "silhouette": 0.04605839836100737,
+      "smallest_cluster": 9849,
+      "largest_cluster": 80573
+    },
+    {
+      "k": 6,
+      "inertia": 609973.6458333334,
+      "inertia_spread": 11011.375,
+      "silhouette": 0.06485952933629353,
+      "smallest_cluster": 4269,
+      "largest_cluster": 63005
+    },
+    {
+      "k": 8,
+      "inertia": 588048.9791666666,
+      "inertia_spread": 12326.8125,
+      "silhouette": 0.07026658703883489,
+      "smallest_cluster": 4075,
+      "largest_cluster": 49176
+    },
+    {
+      "k": 10,
+      "inertia": 566161.0208333334,
+      "inertia_spread": 12683.125,
+      "silhouette": 0.08464098473389943,
+      "smallest_cluster": 3245,
+      "largest_cluster": 30726
+    },
+    {
+      "k": 12,
+      "inertia": 554370.4166666666,
+      "inertia_spread": 4313.5,
+      "silhouette": 0.07608785976966222,
+      "smallest_cluster": 2692,
+      "largest_cluster": 23149
+    },
+    {
+      "k": 14,
+      "inertia": 535593.5416666666,
+      "inertia_spread": 11954.9375,
+      "silhouette": 0.08555037031571071,
+      "smallest_cluster": 1886,
+      "largest_cluster": 21951
+    },
+    {
+      "k": 16,
+      "inertia": 525764.0833333334,
+      "inertia_spread": 11475.875,
+      "silhouette": 0.07869572440783183,
+      "smallest_cluster": 2353,
+      "largest_cluster": 17747
+    },
+    {
+      "k": 18,
+      "inertia": 521052.03125,
+      "inertia_spread": 13617.78125,
+      "silhouette": 0.08183400084575017,
+      "smallest_cluster": 1109,
+      "largest_cluster": 16857
+    },
+    {
+      "k": 20,
+      "inertia": 501066.8125,
+      "inertia_spread": 27913.59375,
+      "silhouette": 0.08393046508232753,
+      "smallest_cluster": 959,
+      "largest_cluster": 16906
+    },
+    {
+      "k": 24,
+      "inertia": 503212.9791666667,
+      "inertia_spread": 7090.71875,
+      "silhouette": 0.07665020724137624,
+      "smallest_cluster": 1311,
+      "largest_cluster": 12099
+    },
+    {
+      "k": 28,
+      "inertia": 490753.3229166667,
+      "inertia_spread": 3273.9375,
+      "silhouette": 0.08140883346398671,
+      "smallest_cluster": 679,
+      "largest_cluster": 11555
+    },
+    {
+      "k": 32,
+      "inertia": 456513.15625,
+      "inertia_spread": 43642.84375,
+      "silhouette": 0.07676263153553009,
+      "smallest_cluster": 242,
+      "largest_cluster": 10141
+    }
+  ],
+  "elbow_k": 10,
+  "best_silhouette_k": 2,
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "silhouette_sample": 5000
+}

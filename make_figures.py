@@ -118,7 +118,8 @@ def main() -> None:
         sizes = labels.value_counts().sort_index()
         fig, ax = plt.subplots(figsize=(6, 3.2))
         ax.bar(sizes.index.astype(str), sizes.values, color=PALETTE[5])
-        ax.set_title("MiniBatchKMeans cluster sizes (k=12)")
+        ax.set_title("MiniBatchKMeans cluster sizes "
+                     f"(k={config.N_CLUSTERS})")
         ax.set_xlabel("Cluster")
         ax.set_ylabel("Restaurants")
         save(fig, "06_cluster_sizes.png")
