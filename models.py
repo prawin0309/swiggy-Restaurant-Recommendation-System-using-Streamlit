@@ -90,7 +90,8 @@ OVERFETCH_FACTOR = 6
 
 def _apply_hard_filters(cleaned: pd.DataFrame, city: str | None,
                         max_cost: float | None,
-                        min_rating: float | None) -> np.ndarray:
+                        min_rating: float | None,
+                        max_rating: float | None = None) -> np.ndarray:
     """Positional indices surviving the user's non-negotiable constraints."""
     mask = pd.Series(True, index=cleaned.index)
     if not is_any_city(city):
@@ -100,6 +101,8 @@ def _apply_hard_filters(cleaned: pd.DataFrame, city: str | None,
         mask &= cleaned["cost"] <= max_cost
     if min_rating is not None:
         mask &= cleaned["rating"] >= min_rating
+    if max_rating is not None:
+        mask &= cleaned["rating"] <= max_rating
     return np.flatnonzero(mask.to_numpy())
 
 
@@ -108,6 +111,7 @@ def recommend(
     cuisines: list[str],
     rating: float,
     cost: float,
+    max_rating: float | None = None,
     rating_count: int = 100,
     method: str = "Cosine Similarity",
     top_k: int = config.TOP_K,
@@ -128,21 +132,45 @@ def recommend(
 
     query = encode_query(city, cuisines, rating, rating_count, cost)
 
-    if apply_filters:
-        candidates = _apply_hard_filters(
-            cleaned, city, cost * 1.35, max(0.0, rating - 0.7)
-        )
-        if exclude_unrated and "is_unrated" in cleaned.columns:
-            rated = np.flatnonzero(~cleaned["is_unrated"].to_numpy(dtype=bool))
-            filtered = np.intersect1d(candidates, rated)
-            if len(filtered) >= top_k:
-                candidates = filtered
-    else:
-        candidates = np.arange(len(cleaned))
+    relaxed_to: str | None = None
 
-    if len(candidates) < top_k:  # Constraints too tight: widen to city only.
-        candidates = _apply_hard_filters(cleaned, city, None, None)
-    if len(candidates) < top_k:  # Still too tight: use the full catalogue.
+    if apply_filters:
+        # Constraint tiers, strictest first. The old implementation went
+        # straight to cost * 1.35 / rating - 0.7 and only tightened later,
+        # so a "4.0+ stars, up to Rs.400" request could return a 3.3-star
+        # venue at Rs.540 even while thousands of exact matches existed.
+        # Now the exact tier is used whenever it yields anything at all, and
+        # the caller is told when a looser tier had to be used instead.
+        # ``max_rating`` caps the band the UI asked for ("3.0+ stars" means
+        # 3.0-3.9), so it is never widened - only the floor and the budget are.
+        tiers = (
+            (None, cost, rating, max_rating),
+            ("budget +35% / rating -0.7", cost * 1.35, max(0.0, rating - 0.7),
+             max_rating),
+            ("city only", None, None, None),
+        )
+        rated = (
+            np.flatnonzero(~cleaned["is_unrated"].to_numpy(dtype=bool))
+            if exclude_unrated and "is_unrated" in cleaned.columns
+            else None
+        )
+
+        candidates = np.empty(0, dtype=int)
+        for label, max_cost, min_rating, cap_rating in tiers:
+            found = _apply_hard_filters(cleaned, city, max_cost, min_rating,
+                                        cap_rating)
+            if rated is not None:
+                only_rated = np.intersect1d(found, rated)
+                if len(only_rated):
+                    found = only_rated
+            if len(found):
+                candidates, relaxed_to = found, label
+                break
+
+        if not len(candidates):  # Nothing anywhere: fall back to everything.
+            candidates = np.arange(len(cleaned))
+            relaxed_to = "the whole catalogue"
+    else:
         candidates = np.arange(len(cleaned))
 
     subset = encoded[candidates]
@@ -194,7 +222,10 @@ def recommend(
 
     result = result.head(top_k)
     result["match_method"] = method
-    return result.reset_index(drop=True)
+    result = result.reset_index(drop=True)
+    # Surfaced by the UI so a widened search is never passed off as an exact one.
+    result.attrs["relaxed_to"] = relaxed_to
+    return result
 
 
 def cluster_assignments(encoded=None) -> np.ndarray:
